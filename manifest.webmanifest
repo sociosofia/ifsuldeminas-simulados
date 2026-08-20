@@ -1,0 +1,13 @@
+{
+  "name": "Simulados IFSULDEMINAS",
+  "short_name": "IFSUL Simulados",
+  "description": "Simulador pessoal com questões reais Fundatec para o IFSULDEMINAS.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef4f3",
+  "theme_color": "#0f5f5b",
+  "lang": "pt-BR",
+  "icons": [
+    {"src":"assets/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
