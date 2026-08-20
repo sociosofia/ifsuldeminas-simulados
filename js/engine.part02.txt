@@ -1,0 +1,280 @@
+"alt-letter">${letter}</span><span class="alt-text">${escapeHtml(text)}</span></div>
+      </label>`;
+    }).join('');
+
+    field.querySelectorAll('input[name="answer"]').forEach(input => {
+      input.addEventListener('change', () => {
+        state.session.responses[q.id] = input.value;
+        field.querySelectorAll('.alt-option').forEach(el => el.classList.toggle('selected', el.dataset.letter === input.value));
+        saveSession();
+      });
+    });
+  }
+
+  function renderReview(q) {
+    const r = state.session.reviews[q.id] || { marked: false, reason: '', note: '' };
+    $('reviewCheck').checked = !!r.marked;
+    $('reviewReason').value = r.reason || '';
+    $('reviewNote').value = r.note || '';
+    $('reviewReasonWrap').classList.toggle('hidden', !r.marked);
+  }
+
+  function captureReview() {
+    const s = state.session;
+    if (!s) return;
+    const q = questionById(s.questionIds[s.currentIndex]);
+    s.reviews[q.id] = {
+      marked: $('reviewCheck').checked,
+      reason: $('reviewReason').value,
+      note: $('reviewNote').value.trim()
+    };
+    saveSession();
+  }
+
+  function go(delta) {
+    captureReview();
+    const s = state.session;
+    if (!s) return;
+    const next = s.currentIndex + delta;
+    if (next >= s.questionIds.length) return finishSession();
+    if (next < 0) return;
+    s.currentIndex = next;
+    renderQuestion();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function finishSession() {
+    captureReview();
+    const s = state.session;
+    if (!s) return;
+    const unanswered = s.questionIds.filter(id => !s.responses[id]).length;
+    if (unanswered > 0) {
+      const ok = confirm(`Há ${unanswered} questão(ões) sem resposta. Deseja finalizar mesmo assim?`);
+      if (!ok) return;
+    }
+
+    s.completed = true;
+    s.completedAt = Date.now();
+    s.elapsedSeconds = elapsedSeconds(s);
+    state.resultSession = JSON.parse(JSON.stringify(s));
+    updateHistoryFromSession(s);
+    localStorage.removeItem(STORAGE.session);
+    state.session = null;
+    stopTimer();
+    renderResults(state.resultSession);
+  }
+
+  function updateHistoryFromSession(s) {
+    s.questionIds.forEach(id => {
+      const q = questionById(id);
+      const answer = s.responses[id] || '';
+      const correct = answer ? answer === q.gabarito_historico : false;
+      const review = s.reviews[id] || {};
+      const prev = state.history[id] || { attempts: 0, correctCount: 0, wrongCount: 0 };
+      state.history[id] = {
+        ...prev,
+        attempts: (prev.attempts || 0) + 1,
+        correctCount: (prev.correctCount || 0) + (correct ? 1 : 0),
+        wrongCount: (prev.wrongCount || 0) + (!correct ? 1 : 0),
+        lastAnswer: answer,
+        lastCorrect: correct,
+        lastAt: Date.now(),
+        review: !!review.marked,
+        reviewReason: review.reason || '',
+        reviewNote: review.note || ''
+      };
+    });
+    saveHistory();
+  }
+
+  function renderResults(s) {
+    showView('resultView');
+    const rows = s.questionIds.map(id => {
+      const q = questionById(id);
+      const answer = s.responses[id] || '';
+      const valid = !String(q.situacao || '').toLowerCase().includes('anulad');
+      const correct = answer && answer === q.gabarito_historico;
+      return { q, answer, correct, valid, review: s.reviews[id] || {} };
+    });
+    const scorable = rows.filter(r => r.valid);
+    const hits = scorable.filter(r => r.correct).length;
+    const pct = scorable.length ? Math.round((hits / scorable.length) * 100) : 0;
+    $('resultTitle').textContent = s.label || 'Resultado';
+    $('scoreBig').textContent = `${hits}/${scorable.length}`;
+    $('resultMeta').textContent = `${pct}% de acertos • ${formatTime(s.elapsedSeconds || 0)} • ${rows.filter(r => !r.answer).length} em branco`;
+
+    renderDisciplineResults(rows);
+    renderDiagnostic(rows);
+    $('reportOutput').value = buildReport(s, rows);
+    renderQuestionResults(rows);
+    $('retryWrongBtn').disabled = !rows.some(r => r.valid && !r.correct);
+  }
+
+  function renderDisciplineResults(rows) {
+    const groups = {};
+    rows.forEach(r => {
+      if (!r.valid) return;
+      const key = r.q.disciplina;
+      groups[key] ||= { total: 0, hits: 0 };
+      groups[key].total += 1;
+      if (r.correct) groups[key].hits += 1;
+    });
+    $('disciplineResults').innerHTML = Object.entries(groups).map(([name, g]) => {
+      const pct = g.total ? Math.round(g.hits / g.total * 100) : 0;
+      return `<div class="result-row"><span>${escapeHtml(name)}</span><strong>${g.hits}/${g.total} • ${pct}%</strong></div>`;
+    }).join('') || '<p>Sem questões pontuáveis.</p>';
+  }
+
+  function renderDiagnostic(rows) {
+    const reviewed = rows.filter(r => r.review.marked).length;
+    const blank = rows.filter(r => !r.answer).length;
+    const wrong = rows.filter(r => r.valid && !r.correct).length;
+    const unseenBefore = rows.filter(r => (state.history[r.q.id]?.attempts || 0) === 1).length;
+    $('diagnosticResults').innerHTML = [
+      ['Erros / brancos', wrong],
+      ['Marcadas para revisão', reviewed],
+      ['Em branco', blank],
+      ['Primeira tentativa', unseenBefore]
+    ].map(([l,n]) => `<div class="result-row"><span>${l}</span><strong>${n}</strong></div>`).join('');
+  }
+
+  function renderQuestionResults(rows) {
+    $('questionResults').innerHTML = rows.map(r => {
+      const status = !r.answer ? 'blank' : (r.correct ? 'ok' : 'wrong');
+      const label = !r.answer ? 'em branco' : (r.correct ? 'correta' : 'incorreta');
+      const review = r.review.marked ? ` • revisar: ${reviewLabel(r.review.reason)}${r.review.note ? ` — ${r.review.note}` : ''}` : '';
+      return `<div class="question-result">
+        <span class="result-dot ${status}"></span>
+        <div><strong>${escapeHtml(r.q.id)}</strong><div class="result-detail">${escapeHtml(r.q.codigo_n2)} • ${escapeHtml(r.q.nivel_2)} • ${label}${escapeHtml(review)}</div></div>
+        <div class="result-answer">${r.answer || '—'} / ${r.q.gabarito_historico || '—'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function reviewLabel(code) {
+    return ({
+      duvida: 'dúvida entre alternativas', conteudo: 'conteúdo desconhecido ou esquecido', comando: 'comando / leitura operacional',
+      reconstrucao: 'reconstrução / raciocínio incompleto', outro: 'outro'
+    })[code] || 'sem motivo informado';
+  }
+
+  function buildReport(s, rows) {
+    const date = new Date(s.completedAt || Date.now()).toLocaleString('pt-BR');
+    const disciplines = [...new Set(rows.map(r => r.q.disciplina))].join(', ');
+    const scorable = rows.filter(r => r.valid);
+    const hits = scorable.filter(r => r.correct).length;
+    const lines = [
+      `SIMULADO: ${s.id}`,
+      `Modelo: ${s.label}`,
+      `Disciplinas: ${disciplines}`,
+      `Questões: ${rows.length}`,
+      `Concluído em: ${date}`,
+      `Tempo: ${formatTime(s.elapsedSeconds || 0)}`,
+      `Resultado: ${hits}/${scorable.length} (${scorable.length ? Math.round(hits/scorable.length*100) : 0}%)`,
+      '',
+      'RESPOSTAS:'
+    ];
+    rows.forEach((r, idx) => {
+      let line = `Q${String(idx + 1).padStart(2,'0')} [${r.q.id}]: ${r.answer || '-'}`;
+      if (r.review.marked) line += ` | PARA REVISAR | ${reviewLabel(r.review.reason)}${r.review.note ? ` | ${r.review.note}` : ''}`;
+      lines.push(line);
+    });
+    return lines.join('\n');
+  }
+
+  function retryWrong() {
+    const s = state.resultSession;
+    if (!s) return;
+    const ids = s.questionIds.filter(id => {
+      const q = questionById(id);
+      return !String(q.situacao || '').toLowerCase().includes('anulad') && s.responses[id] !== q.gabarito_historico;
+    });
+    if (!ids.length) return toast('Não há erros para treinar nesta sessão.');
+    startSession(makeSession(shuffle(ids), 'Retreino • erros da sessão anterior', 'retry-wrong'));
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+  }
+  function escapeAttr(value) { return escapeHtml(value); }
+
+  function bindEvents() {
+    $('disciplineSelect').addEventListener('change', updateTopicOptions);
+    $('topicSelect').addEventListener('change', refreshPoolInfo);
+    $('historyFilter').addEventListener('change', refreshPoolInfo);
+    $('quantityInput').addEventListener('input', refreshPoolInfo);
+    $('excludeAnnulled').addEventListener('change', refreshPoolInfo);
+    $('customExamBtn').addEventListener('click', buildCustomExam);
+    $('fullExamBtn').addEventListener('click', buildFullExam);
+    $('resumeBtn').addEventListener('click', resumeSession);
+    $('discardBtn').addEventListener('click', () => { localStorage.removeItem(STORAGE.session); renderHome(); toast('Sessão descartada.'); });
+    $('clearHistoryBtn').addEventListener('click', () => {
+      if (!confirm('Apagar todo o histórico de respostas e revisões deste dispositivo?')) return;
+      state.history = {};
+      saveHistory();
+      renderHome();
+      toast('Histórico local apagado.');
+    });
+
+    $('supportToggle').addEventListener('click', () => {
+      const content = $('supportContent');
+      const open = content.classList.toggle('hidden') === false;
+      $('supportToggle').setAttribute('aria-expanded', String(open));
+    });
+    $('reviewCheck').addEventListener('change', () => {
+      $('reviewReasonWrap').classList.toggle('hidden', !$('reviewCheck').checked);
+      captureReview();
+    });
+    $('reviewReason').addEventListener('change', captureReview);
+    $('reviewNote').addEventListener('input', captureReview);
+    $('prevBtn').addEventListener('click', () => go(-1));
+    $('nextBtn').addEventListener('click', () => go(1));
+    $('finishTopBtn').addEventListener('click', finishSession);
+
+    $('questionAsset').addEventListener('click', () => {
+      $('dialogImage').src = $('questionAsset').src;
+      $('imageDialog').showModal();
+    });
+    $('closeImageBtn').addEventListener('click', () => $('imageDialog').close());
+    $('imageDialog').addEventListener('click', e => { if (e.target === $('imageDialog')) $('imageDialog').close(); });
+
+    $('copyReportBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($('reportOutput').value);
+        toast('Relatório copiado.');
+      } catch {
+        $('reportOutput').select();
+        document.execCommand('copy');
+        toast('Relatório copiado.');
+      }
+    });
+    $('backHomeBtn').addEventListener('click', renderHome);
+    $('retryWrongBtn').addEventListener('click', retryWrong);
+  }
+
+  async function init() {
+    try {
+      state.history = safeParse(localStorage.getItem(STORAGE.history), {});
+      if (!('DecompressionStream' in window)) throw new Error('Este navegador não suporta a descompactação do banco. Atualize o navegador.');
+      const parts = await Promise.all(DATA_PARTS.map(async path => {
+        const response = await fetch(path, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Falha ao carregar ${path}`);
+        return (await response.text()).trim();
+      }));
+      const binary = atob(parts.join(''));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const stream = new Response(bytes).body.pipeThrough(new DecompressionStream('gzip'));
+      state.banco = JSON.parse(await new Response(stream).text());
+      state.questions = state.banco.questoes || [];
+      state.supports = new Map((state.banco.suportes || []).map(s => [s.id, s]));
+      populateFilters();
+      bindEvents();
+      renderHome();
+
+      if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
+    } catch (error) {
+      $('loadingView').innerHTML = `<h1>Não foi possível abrir o banco</h1><p>${escapeHtml(error.message)}</p><p>Abra o simulador por um endereço web (GitHub Pages/Cloudflare Pages), não diretamente pelo arquivo local.</p>`;
+  
