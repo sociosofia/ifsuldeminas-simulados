@@ -6,7 +6,13 @@
       if (!response.ok) throw new Error(`Falha ao carregar o motor (${response.status})`);
       return response.text();
     }));
-    const code = parts.join('');
+
+    let code = parts.join('');
+    code = code.replace(
+      "const DATA_PARTS = ['data/banco.part01.b64','data/banco.part02.b64','data/banco.part03.b64','data/banco.part04.b64'];",
+      "const DATA_PARTS = ['data/banco.part01.b64','data/banco.part02.b64','data/banco.part03.b64','data/banco.part04.b64','data/banco.part05.b64','data/banco.part06.b64','data/banco.part07.b64','data/banco.part08.b64'];"
+    );
+
     const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
     const script = document.createElement('script');
     script.src = url;
