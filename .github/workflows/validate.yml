@@ -1,0 +1,69 @@
+name: Validar MVP
+
+on:
+  push:
+    branches: [mvp-v0.1, main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar banco e imagem
+        shell: python
+        run: |
+          import base64, gzip, hashlib, json, pathlib
+
+          root = pathlib.Path('.')
+          bank_b64 = ''.join((root / 'data' / f'banco.part{i:02d}.b64').read_text().strip() for i in range(1, 9))
+          raw = gzip.decompress(base64.b64decode(bank_b64))
+          assert hashlib.sha256(raw).hexdigest() == 'db16349342ee255fb8198c0bc2aaa98fff8835e0765ab16c1dc48d684e52d9ad'
+          bank = json.loads(raw)
+          qs = bank['questoes']
+          assert len(qs) == 255
+          assert len({q['id'] for q in qs}) == 255
+          assert bank['metadados']['questoes_validas'] == 251
+          assert bank['metadados']['questoes_anuladas'] == 4
+
+          for q in qs:
+              status = str(q.get('situacao', '')).lower()
+              gab = q.get('gabarito_historico')
+              if gab and 'anulad' not in status:
+                  assert gab in (q.get('alternativas') or {}), (q['id'], gab)
+
+          supports = {s['id'] for s in bank.get('suportes', [])}
+          asset_paths = {a.get('caminho') for a in bank.get('assets', []) if isinstance(a, dict)}
+          for q in qs:
+              ext = q.get('extensoes') or {}
+              if ext.get('suporte_id'):
+                  assert ext['suporte_id'] in supports, (q['id'], ext['suporte_id'])
+              if ext.get('asset'):
+                  assert ext['asset'] in asset_paths, (q['id'], ext['asset'])
+
+          img_b64 = ''.join((root / 'assets' / f'ifc_2026_q03_charge.part{i:02d}.b64').read_text().strip() for i in range(1, 3))
+          img = base64.b64decode(img_b64)
+          assert hashlib.sha256(img).hexdigest() == 'ce7ae71613730ac37f8b5641d337e8252026973d06706f8e560f57960463c79f'
+          assert img[:2] == b'\xff\xd8' and img[-2:] == b'\xff\xd9'
+
+          print('Banco, referências e imagem: OK')
+
+      - name: Validar JavaScript
+        shell: bash
+        run: |
+          cat js/engine.part01.txt js/engine.part02.txt js/engine.part03.txt > /tmp/engine.js
+          node --check /tmp/engine.js
+          node --check js/app.js
+          node --check sw.js
+
+      - name: Conferir arquivos do cache offline
+        shell: python
+        run: |
+          import pathlib, re
+          text = pathlib.Path('sw.js').read_text()
+          paths = re.findall(r"'\./([^']+)'", text)
+          missing = [p for p in paths if p and not pathlib.Path(p).exists()]
+          assert not missing, f'Arquivos ausentes no CORE do service worker: {missing}'
+          print('Cache offline: OK')
