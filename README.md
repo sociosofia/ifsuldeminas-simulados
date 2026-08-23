@@ -21,13 +21,19 @@ PWA pessoal para treino com **questões reais Fundatec** reunidas no banco-mestr
 
 ## Arquitetura
 
-- `data/banco.part*.b64`: exportação operacional compactada do banco-mestre, dividida em quatro partes para armazenamento textual no repositório e descompactada no navegador.
+- `data/banco.part*.b64`: exportação operacional compactada do banco-mestre, dividida em oito partes para armazenamento textual no repositório e descompactada no navegador.
 - `data/manifest.json`: inventário do pacote.
 - `index.html`, `css/`, `js/`: motor do simulador.
-- `assets/`: imagem exigida pela questão (armazenada em Base64 textual nesta primeira versão) e ícone do PWA.
+- `assets/`: imagem exigida pela questão (armazenada em duas partes Base64 textuais nesta primeira versão) e ícone do PWA.
 
-O arquivo Excel permanece como fonte editorial/auditável. O JSON é a camada de distribuição do aplicativo.
+O arquivo Excel permanece como fonte editorial/auditável. O JSON é a camada de distribuição do aplicativo. O histórico de resolução é independente do banco e permanece no dispositivo do usuário.
+
+## Validação do pacote
+
+A exportação operacional foi conferida contra o JSON do banco-mestre: as oito partes remontam e descompactam exatamente o arquivo-fonte com 255 questões. A imagem da questão IFC 2026 também foi conferida após a remontagem das duas partes Base64.
 
 ## Publicação
 
-O repositório foi criado como privado. Para testar em navegador/celular, publique a pasta raiz por um host estático que tenha acesso ao repositório (por exemplo, Cloudflare Pages). Abrir `index.html` diretamente pelo sistema de arquivos não é suportado porque o navegador bloqueia o carregamento do JSON por `fetch`.
+O repositório foi criado como privado. Para testar em navegador/celular, publique a pasta raiz por um host estático que tenha acesso ao repositório. Abrir `index.html` diretamente pelo sistema de arquivos não é suportado porque o navegador bloqueia o carregamento do banco por `fetch`.
+
+Como o pacote contém o texto integral das questões, a publicação web deve ser tratada separadamente da hospedagem do código. Se o objetivo continuar sendo uso pessoal, prefira uma camada de acesso autenticado em vez de simplesmente tornar o repositório ou os dados públicos.
