@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f766e" />
+  <title>Simulados IFSULDEMINAS</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div>
+        <p class="eyebrow">FUNDATEC · IFSULDEMINAS</p>
+        <h1>Simulados IFSULDEMINAS</h1>
+      </div>
+      <div id="timer" class="timer" aria-live="polite">00:00</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="config" class="panel config-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">MVP 0.1</p>
+          <h2>Montar simulado</h2>
+          <p class="muted">Primeira casca funcional. Por enquanto, o banco de teste tem 6 questões reais: 3 de Legislação e 3 de Sociologia. Português entra na próxima etapa, junto com os suportes textuais.</p>
+        </div>
+      </div>
+
+      <fieldset>
+        <legend>Disciplinas</legend>
+        <div id="discipline-options" class="chips"></div>
+      </fieldset>
+
+      <div class="config-grid">
+        <label>
+          Quantidade
+          <select id="quantity"></select>
+        </label>
+        <label>
+          Ordem
+          <select id="order">
+            <option value="random">Aleatória</option>
+            <option value="original">Ordem do banco</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="start-btn" class="primary">Gerar simulado</button>
+        <button id="resume-btn" class="secondary hidden">Retomar simulado salvo</button>
+      </div>
+      <p id="config-message" class="message" role="status"></p>
+    </section>
+
+    <section id="quiz" class="hidden">
+      <div class="quiz-toolbar panel">
+        <div>
+          <strong id="progress-text">Questão 1 de 1</strong>
+          <div class="progress"><span id="progress-bar"></span></div>
+        </div>
+        <button id="back-config-btn" class="ghost">Voltar à seleção</button>
+      </div>
+
+      <div id="questions"></div>
+
+      <div class="finish-box panel">
+        <button id="finish-btn" class="primary">Finalizar simulado</button>
+        <p class="muted small">O gabarito só aparece depois da finalização.</p>
+      </div>
+    </section>
+
+    <section id="results" class="panel hidden">
+      <p class="eyebrow">RESULTADO</p>
+      <h2 id="score-title">0 / 0</h2>
+      <p id="score-detail" class="muted"></p>
+      <div class="actions">
+        <button id="copy-report-btn" class="primary">Copiar relatório</button>
+        <button id="new-btn" class="secondary">Novo simulado</button>
+      </div>
+      <textarea id="report" class="report" readonly></textarea>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <p>Questões reais do banco mestre. Sem geração de itens inéditos.</p>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
