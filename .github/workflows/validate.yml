@@ -60,11 +60,12 @@ jobs:
       - name: Validar imagem da questão
         shell: python
         run: |
-          import base64, pathlib
+          import base64, hashlib, pathlib
 
           root = pathlib.Path('.')
           img_b64 = ''.join((root / 'assets' / f'ifc_2026_q03_charge.part{i:02d}.b64').read_text().strip() for i in range(1, 3))
           img = base64.b64decode(img_b64, validate=True)
+          assert hashlib.sha256(img).hexdigest() == 'f899a28347aca9f759fe06e7bbaf9d16c9f0d68f47e20fe80f28eb31bfb09d0c'
           assert img[:2] == b'\xff\xd8', 'JPEG sem marcador SOI'
           assert img[-2:] == b'\xff\xd9', 'JPEG sem marcador EOI'
 
@@ -90,7 +91,7 @@ jobs:
                   break
               i += seglen
           assert size and size[0] > 0 and size[1] > 0, 'Dimensões JPEG não encontradas'
-          print(f'Imagem: OK — JPEG {size[0]}x{size[1]}')
+          print(f'Imagem: OK — JPEG {size[0]}x{size[1]} — SHA-256 conferido')
 
       - name: Validar JavaScript
         shell: bash
