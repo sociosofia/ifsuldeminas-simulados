@@ -17,7 +17,7 @@ PWA pessoal para treino com **questões reais Fundatec** reunidas no banco-mestr
 - retreino dos erros da sessão;
 - cronômetro automático;
 - relatório final copiável no formato usado nas análises do projeto;
-- service worker para funcionamento offline depois do primeiro carregamento.
+- service worker para funcionamento offline depois do primeiro carregamento, incluindo a imagem da questão no cache-base.
 
 ## Arquitetura
 
@@ -26,7 +26,8 @@ O banco é distribuído como Base64 + gzip. Para evitar corrupção em arquivos 
 - `data/banco.part*.b64`: fragmentos operacionais verificados do banco-mestre;
 - `data/manifest.json`: inventário do pacote;
 - `index.html`, `css/`, `js/`: interface e motor do simulador;
-- `assets/`: imagem exigida pela questão e ícone do PWA;
+- `assets/ifc_2026_q03_charge.part01.b64` e `part02.b64`: imagem otimizada da questão IFC 2026, remontada sob demanda;
+- `assets/icon.svg`: ícone do PWA;
 - `.github/workflows/validate.yml`: auditoria automática do banco, referências, JavaScript, imagem e cache offline.
 
 O arquivo Excel permanece como fonte editorial/auditável. O pacote JSON compactado é a camada de distribuição do aplicativo. O histórico de resolução é independente do banco e permanece no dispositivo do usuário.
@@ -34,6 +35,8 @@ O arquivo Excel permanece como fonte editorial/auditável. O pacote JSON compact
 ## Integridade
 
 A exportação operacional do banco foi reconstruída e conferida contra o arquivo-fonte: SHA-256 `db16349342ee255fb8198c0bc2aaa98fff8835e0765ab16c1dc48d684e52d9ad`, com 255 questões, 255 IDs únicos, 251 válidas e 4 anuladas.
+
+A imagem otimizada da questão IFC 2026 também é validada byte a byte: JPEG 360×239, SHA-256 `f899a28347aca9f759fe06e7bbaf9d16c9f0d68f47e20fe80f28eb31bfb09d0c`.
 
 O workflow do repositório repete essas verificações e também confere gabaritos, referências a textos-base/assets, sintaxe JavaScript e existência de todos os arquivos necessários ao cache offline.
 
