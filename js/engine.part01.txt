@@ -1,0 +1,308 @@
+(() => {
+  'use strict';
+
+  const DATA_PARTS = ['data/banco.part01.b64','data/banco.part02.b64','data/banco.part03.b64','data/banco.part04.b64','data/banco.part05.b64','data/banco.part06.b64','data/banco.part07.b64','data/banco.part08.b64'];
+  const ASSET_BASE64 = { 'assets/ifc_2026_q03_charge.jpg': ['assets/ifc_2026_q03_charge.part01.b64','assets/ifc_2026_q03_charge.part02.b64'] };
+  const STORAGE = {
+    session: 'ifsul.simulados.session.v1',
+    history: 'ifsul.simulados.history.v1'
+  };
+
+  const state = {
+    banco: null,
+    questions: [],
+    supports: new Map(),
+    session: null,
+    history: {},
+    timerHandle: null,
+    resultSession: null
+  };
+
+  const $ = id => document.getElementById(id);
+  const views = ['loadingView', 'homeView', 'quizView', 'resultView'];
+
+  function showView(id) {
+    views.forEach(v => $(v).classList.toggle('hidden', v !== id));
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function toast(message, timeout = 2200) {
+    const el = $('toast');
+    el.textContent = message;
+    el.classList.remove('hidden');
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => el.classList.add('hidden'), timeout);
+  }
+
+  function safeParse(raw, fallback) {
+    try { return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
+  }
+
+  function saveHistory() {
+    localStorage.setItem(STORAGE.history, JSON.stringify(state.history));
+  }
+
+  function saveSession() {
+    if (!state.session) return;
+    state.session.updatedAt = Date.now();
+    localStorage.setItem(STORAGE.session, JSON.stringify(state.session));
+  }
+
+  function clearSession() {
+    state.session = null;
+    localStorage.removeItem(STORAGE.session);
+    stopTimer();
+  }
+
+  function formatTime(totalSeconds) {
+    const s = Math.max(0, Math.floor(totalSeconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0
+      ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+      : `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  }
+
+  function elapsedSeconds(session = state.session) {
+    if (!session) return 0;
+    const paused = session.pausedSeconds || 0;
+    return Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000) - paused);
+  }
+
+  function startTimer() {
+    stopTimer();
+    $('timerTop').classList.remove('timer--hidden');
+    const tick = () => {
+      if (!state.session) return;
+      $('timerTop').textContent = formatTime(elapsedSeconds());
+    };
+    tick();
+    state.timerHandle = setInterval(tick, 1000);
+  }
+
+  function stopTimer() {
+    if (state.timerHandle) clearInterval(state.timerHandle);
+    state.timerHandle = null;
+    $('timerTop').classList.add('timer--hidden');
+  }
+
+  function shuffle(array) {
+    const a = [...array];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function questionById(id) {
+    return state.questions.find(q => q.id === id);
+  }
+
+  function getQuestionHistory(id) {
+    return state.history[id] || null;
+  }
+
+  function filteredPool() {
+    const discipline = $('disciplineSelect').value;
+    const topic = $('topicSelect').value;
+    const hist = $('historyFilter').value;
+    const excludeAnnulled = $('excludeAnnulled').checked;
+
+    return state.questions.filter(q => {
+      if (discipline !== 'all' && q.disciplina_slug !== discipline) return false;
+      if (topic !== 'all' && q.codigo_n2 !== topic) return false;
+      if (excludeAnnulled && String(q.situacao || '').toLowerCase().includes('anulad')) return false;
+      const h = getQuestionHistory(q.id);
+      if (hist === 'unseen' && h) return false;
+      if (hist === 'wrong' && !(h && h.lastCorrect === false)) return false;
+      if (hist === 'review' && !(h && h.review === true)) return false;
+      return true;
+    });
+  }
+
+  function refreshPoolInfo() {
+    const pool = filteredPool();
+    const qty = Math.max(1, Number($('quantityInput').value) || 1);
+    $('poolInfo').textContent = `${pool.length} questão(ões) disponíveis neste recorte${qty > pool.length ? ' — reduza a quantidade.' : '.'}`;
+    $('customExamBtn').disabled = pool.length === 0 || qty > pool.length;
+  }
+
+  function populateFilters() {
+    const disciplines = state.banco.metadados.disciplinas || [];
+    $('disciplineSelect').innerHTML = '<option value="all">Todas</option>' + disciplines
+      .map(d => `<option value="${escapeAttr(d.slug)}">${escapeHtml(d.nome)} (${d.quantidade})</option>`).join('');
+    updateTopicOptions();
+  }
+
+  function updateTopicOptions() {
+    const selected = $('disciplineSelect').value;
+    const tax = (state.banco.taxonomias || []).filter(t => selected === 'all' || t.disciplina_slug === selected);
+    const options = tax
+      .sort((a,b) => `${a.disciplina} ${a.codigo_n2}`.localeCompare(`${b.disciplina} ${b.codigo_n2}`, 'pt-BR'))
+      .map(t => `<option value="${escapeAttr(t.codigo_n2)}">${escapeHtml(t.codigo_n2)} — ${escapeHtml(t.nivel_2)} (${t.quantidade_recalculada ?? t.quantidade})</option>`)
+      .join('');
+    $('topicSelect').innerHTML = `<option value="all">Todos os núcleos</option>${options}`;
+    refreshPoolInfo();
+  }
+
+  function renderHome() {
+    stopTimer();
+    showView('homeView');
+    const m = state.banco.metadados;
+    $('heroStats').innerHTML = [
+      [m.quantidade_total, 'questões no banco'],
+      [m.questoes_validas, 'válidas'],
+      [m.taxonomias_n2, 'núcleos N2'],
+      [m.suportes, 'textos-base']
+    ].map(([n,l]) => `<div class="stat-box"><strong>${n}</strong><span>${l}</span></div>`).join('');
+
+    const answered = Object.keys(state.history).length;
+    const correct = Object.values(state.history).filter(h => h.lastCorrect === true).length;
+    const review = Object.values(state.history).filter(h => h.review === true).length;
+    $('historyStats').innerHTML = [
+      [answered, 'já vistas'], [correct, 'último acerto'], [review, 'para revisar']
+    ].map(([n,l]) => `<div class="mini-stat"><strong>${n}</strong><span>${l}</span></div>`).join('');
+
+    const saved = safeParse(localStorage.getItem(STORAGE.session), null);
+    const validSaved = saved && Array.isArray(saved.questionIds) && saved.questionIds.length > 0 && !saved.completed;
+    $('resumeCard').classList.toggle('hidden', !validSaved);
+    if (validSaved) {
+      const answeredCount = Object.values(saved.responses || {}).filter(Boolean).length;
+      $('resumeText').textContent = `${answeredCount} de ${saved.questionIds.length} respondidas. O progresso foi salvo automaticamente.`;
+    }
+    refreshPoolInfo();
+  }
+
+  function makeSession(questionIds, label, mode = 'custom') {
+    return {
+      version: 1,
+      id: `SIM-${Date.now()}`,
+      label,
+      mode,
+      questionIds,
+      currentIndex: 0,
+      responses: {},
+      reviews: {},
+      startedAt: Date.now(),
+      pausedSeconds: 0,
+      updatedAt: Date.now(),
+      completed: false
+    };
+  }
+
+  function startSession(session) {
+    state.session = session;
+    saveSession();
+    showView('quizView');
+    startTimer();
+    renderQuestion();
+  }
+
+  function buildCustomExam() {
+    const pool = filteredPool();
+    const qty = Math.max(1, Number($('quantityInput').value) || 1);
+    if (pool.length < qty) return toast('Não há questões suficientes neste recorte.');
+    const selected = shuffle(pool).slice(0, qty).map(q => q.id);
+    const discipline = $('disciplineSelect').selectedOptions[0]?.textContent || 'Todas';
+    const topic = $('topicSelect').value === 'all' ? '' : ` • ${$('topicSelect').selectedOptions[0]?.textContent || ''}`;
+    startSession(makeSession(selected, `${discipline}${topic}`, 'custom'));
+  }
+
+  function buildFullExam() {
+    const plan = { portugues: 10, legislacao: 10, sociologia: 30 };
+    const selected = [];
+    for (const [slug, qty] of Object.entries(plan)) {
+      const pool = state.questions.filter(q => q.disciplina_slug === slug && !String(q.situacao || '').toLowerCase().includes('anulad'));
+      if (pool.length < qty) return toast(`Banco insuficiente para ${slug}.`);
+      selected.push(...shuffle(pool).slice(0, qty).map(q => q.id));
+    }
+    startSession(makeSession(shuffle(selected), 'Prova completa • 10 PT + 10 LEG + 30 SOC', 'full'));
+  }
+
+  function resumeSession() {
+    const saved = safeParse(localStorage.getItem(STORAGE.session), null);
+    if (!saved) return renderHome();
+    const missing = saved.questionIds.some(id => !questionById(id));
+    if (missing) {
+      localStorage.removeItem(STORAGE.session);
+      toast('A sessão salva não combina com a versão atual do banco.');
+      return renderHome();
+    }
+    const idleSeconds = Math.max(0, Math.floor((Date.now() - (saved.updatedAt || Date.now())) / 1000));
+    saved.pausedSeconds = (saved.pausedSeconds || 0) + idleSeconds;
+    startSession(saved);
+  }
+
+  function renderQuestion() {
+    const s = state.session;
+    if (!s) return renderHome();
+    const q = questionById(s.questionIds[s.currentIndex]);
+    if (!q) return;
+
+    $('progressText').textContent = `Questão ${s.currentIndex + 1} de ${s.questionIds.length}`;
+    $('progressBar').style.width = `${((s.currentIndex + 1) / s.questionIds.length) * 100}%`;
+    $('prevBtn').disabled = s.currentIndex === 0;
+    $('nextBtn').textContent = s.currentIndex === s.questionIds.length - 1 ? 'Finalizar →' : 'Próxima →';
+
+    const meta = [
+      `<span class="chip primary">${escapeHtml(q.id)}</span>`,
+      `<span class="chip">${escapeHtml(q.disciplina)}</span>`,
+      `<span class="chip">${escapeHtml(q.codigo_n2)} • ${escapeHtml(q.nivel_2)}</span>`,
+      q.origem?.instituicao ? `<span class="chip">${escapeHtml(q.origem.instituicao)} • ${escapeHtml(String(q.origem.ano || ''))}</span>` : ''
+    ].filter(Boolean).join('');
+    $('questionChips').innerHTML = meta;
+    $('knownBadge').classList.toggle('hidden', !getQuestionHistory(q.id));
+
+    renderSupport(q);
+    $('questionStatement').textContent = q.enunciado || '';
+    renderAsset(q);
+    renderAlternatives(q);
+    renderReview(q);
+    saveSession();
+  }
+
+  function renderSupport(q) {
+    const supportId = q.extensoes?.suporte_id;
+    const support = supportId ? state.supports.get(supportId) : null;
+    const block = $('supportBlock');
+    block.classList.toggle('hidden', !support);
+    if (!support) return;
+    $('supportToggle').setAttribute('aria-expanded', 'false');
+    $('supportContent').classList.add('hidden');
+    $('supportContent').textContent = support.texto || '';
+  }
+
+  function renderAsset(q) {
+    const path = q.extensoes?.asset;
+    const wrap = $('assetWrap');
+    const img = $('questionAsset');
+    const loading = $('assetLoading');
+    wrap.classList.toggle('hidden', !path);
+    if (!path) {
+      img.removeAttribute('src');
+      return;
+    }
+    loading.classList.remove('hidden');
+    img.onload = () => loading.classList.add('hidden');
+    img.onerror = () => { loading.textContent = 'Não foi possível carregar a imagem.'; };
+    const encodedPaths = ASSET_BASE64[path];
+    if (encodedPaths) {
+      Promise.all(encodedPaths.map(assetPath => fetch(assetPath).then(r => { if (!r.ok) throw new Error(); return r.text(); })))
+        .then(parts => { img.src = `data:image/jpeg;base64,${parts.map(x => x.trim()).join('')}`; })
+        .catch(() => { loading.textContent = 'Não foi possível carregar a imagem.'; });
+    } else {
+      img.src = path;
+    }
+  }
+
+  function renderAlternatives(q) {
+    const selected = state.session.responses[q.id] || '';
+    const field = $('alternatives');
+    field.innerHTML = Object.entries(q.alternativas || {}).map(([letter, text]) => {
+      const checked = selected === letter ? 'checked' : '';
+      const cls = selected === letter ? ' selected' : '';
+      return `<label class="alt-option${cls}" data-letter="${letter}">
+        <input type="radio" name="answer" value="${letter}" ${checked} />
+        <div><span class=

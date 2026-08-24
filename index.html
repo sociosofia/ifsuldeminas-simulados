@@ -2,91 +2,225 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0f766e" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f5f5b" />
+  <meta name="description" content="Simulador pessoal de questões reais Fundatec para o concurso IFSULDEMINAS." />
   <title>Simulados IFSULDEMINAS</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="wrap topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">IF</div>
       <div>
-        <p class="eyebrow">FUNDATEC · IFSULDEMINAS</p>
-        <h1>Simulados IFSULDEMINAS</h1>
+        <div class="brand-title">Simulados IFSULDEMINAS</div>
+        <div class="brand-subtitle">Questões reais • Fundatec</div>
       </div>
-      <div id="timer" class="timer" aria-live="polite">00:00</div>
     </div>
+    <div id="timerTop" class="timer timer--hidden">00:00</div>
   </header>
 
-  <main class="wrap">
-    <section id="config" class="panel config-panel">
-      <div class="panel-heading">
+  <main id="app" class="app-shell" aria-live="polite">
+    <section id="loadingView" class="card center-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>Carregando banco de questões</h1>
+      <p>Preparando o simulador e o histórico deste dispositivo.</p>
+    </section>
+
+    <section id="homeView" class="view hidden">
+      <div class="hero card">
         <div>
-          <p class="eyebrow">MVP 0.1</p>
-          <h2>Montar simulado</h2>
-          <p class="muted">Primeira casca funcional. Por enquanto, o banco de teste tem 6 questões reais: 3 de Legislação e 3 de Sociologia. Português entra na próxima etapa, junto com os suportes textuais.</p>
+          <span class="eyebrow">Preparação IFSULDEMINAS • MCH-5</span>
+          <h1>Monte o treino que cabe no seu tempo.</h1>
+          <p>O banco permanece separado do motor do simulador. Suas respostas, revisões e histórico ficam salvos neste navegador.</p>
+        </div>
+        <div class="hero-stats" id="heroStats"></div>
+      </div>
+
+      <div id="resumeCard" class="card resume-card hidden">
+        <div>
+          <span class="eyebrow">Sessão em andamento</span>
+          <h2>Há um simulado salvo neste dispositivo.</h2>
+          <p id="resumeText"></p>
+        </div>
+        <div class="button-row">
+          <button id="resumeBtn" class="btn btn-primary">Continuar</button>
+          <button id="discardBtn" class="btn btn-ghost">Descartar</button>
         </div>
       </div>
 
-      <fieldset>
-        <legend>Disciplinas</legend>
-        <div id="discipline-options" class="chips"></div>
-      </fieldset>
+      <div class="grid two-cols">
+        <section class="card">
+          <span class="eyebrow">Atalho</span>
+          <h2>Prova completa</h2>
+          <p>Replica a estrutura objetiva atual: 10 de Português, 10 de Legislação e 30 de Sociologia.</p>
+          <div class="exam-composition">
+            <span>Português <strong>10</strong></span>
+            <span>Legislação <strong>10</strong></span>
+            <span>Sociologia <strong>30</strong></span>
+          </div>
+          <button id="fullExamBtn" class="btn btn-primary btn-wide">Gerar prova de 50 questões</button>
+        </section>
 
-      <div class="config-grid">
-        <label>
-          Quantidade
-          <select id="quantity"></select>
-        </label>
-        <label>
-          Ordem
-          <select id="order">
-            <option value="random">Aleatória</option>
-            <option value="original">Ordem do banco</option>
-          </select>
-        </label>
+        <section class="card">
+          <span class="eyebrow">Treino personalizado</span>
+          <h2>Escolha o recorte</h2>
+          <div class="form-grid">
+            <label>
+              Disciplina
+              <select id="disciplineSelect"></select>
+            </label>
+            <label>
+              Núcleo
+              <select id="topicSelect"></select>
+            </label>
+            <label>
+              Histórico
+              <select id="historyFilter">
+                <option value="all">Todas as questões</option>
+                <option value="unseen">Ainda não respondidas</option>
+                <option value="wrong">Erradas anteriormente</option>
+                <option value="review">Marcadas para revisão</option>
+              </select>
+            </label>
+            <label>
+              Quantidade
+              <input id="quantityInput" type="number" min="1" max="100" value="10" inputmode="numeric" />
+            </label>
+          </div>
+          <label class="check-row">
+            <input id="excludeAnnulled" type="checkbox" checked />
+            <span>Excluir questões anuladas</span>
+          </label>
+          <div id="poolInfo" class="pool-info"></div>
+          <button id="customExamBtn" class="btn btn-primary btn-wide">Gerar simulado</button>
+        </section>
       </div>
 
-      <div class="actions">
-        <button id="start-btn" class="primary">Gerar simulado</button>
-        <button id="resume-btn" class="secondary hidden">Retomar simulado salvo</button>
-      </div>
-      <p id="config-message" class="message" role="status"></p>
-    </section>
-
-    <section id="quiz" class="hidden">
-      <div class="quiz-toolbar panel">
+      <section class="card history-summary">
         <div>
-          <strong id="progress-text">Questão 1 de 1</strong>
-          <div class="progress"><span id="progress-bar"></span></div>
+          <span class="eyebrow">Seu histórico local</span>
+          <h2>O simulador aprende o que você já viu.</h2>
         </div>
-        <button id="back-config-btn" class="ghost">Voltar à seleção</button>
+        <div id="historyStats" class="mini-stats"></div>
+        <button id="clearHistoryBtn" class="btn btn-danger-ghost">Limpar histórico deste dispositivo</button>
+      </section>
+    </section>
+
+    <section id="quizView" class="view hidden">
+      <div class="quiz-toolbar card compact-card">
+        <div>
+          <div id="progressText" class="progress-label"></div>
+          <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+        </div>
+        <div class="toolbar-actions">
+          <button id="finishTopBtn" class="btn btn-ghost btn-small">Finalizar</button>
+        </div>
       </div>
 
-      <div id="questions"></div>
+      <article class="card question-card">
+        <div class="question-meta">
+          <div class="chips" id="questionChips"></div>
+          <span id="knownBadge" class="known-badge hidden">Já resolvida antes</span>
+        </div>
 
-      <div class="finish-box panel">
-        <button id="finish-btn" class="primary">Finalizar simulado</button>
-        <p class="muted small">O gabarito só aparece depois da finalização.</p>
+        <section id="supportBlock" class="support-block hidden">
+          <button id="supportToggle" class="support-toggle" type="button" aria-expanded="false">
+            <span>Texto-base da questão</span><span class="chevron">⌄</span>
+          </button>
+          <div id="supportContent" class="support-content hidden"></div>
+        </section>
+
+        <div id="questionStatement" class="question-statement"></div>
+        <div id="assetWrap" class="asset-wrap hidden">
+          <div class="asset-loading hidden" id="assetLoading">Baixando imagem da questão…</div>
+          <img id="questionAsset" alt="Imagem associada à questão" />
+          <p class="asset-hint">Toque na imagem para ampliar.</p>
+        </div>
+        <fieldset id="alternatives" class="alternatives"></fieldset>
+
+        <div class="review-box">
+          <label class="check-row strong-check">
+            <input id="reviewCheck" type="checkbox" />
+            <span>Marcar para revisão</span>
+          </label>
+          <div id="reviewReasonWrap" class="review-reason hidden">
+            <label>
+              Motivo
+              <select id="reviewReason">
+                <option value="">Selecione</option>
+                <option value="duvida">dúvida entre alternativas</option>
+                <option value="conteudo">conteúdo desconhecido ou esquecido</option>
+                <option value="comando">comando / leitura operacional</option>
+                <option value="reconstrucao">reconstrução / raciocínio incompleto</option>
+                <option value="outro">outro</option>
+              </select>
+            </label>
+            <label>
+              Nota opcional
+              <input id="reviewNote" type="text" maxlength="160" placeholder="Ex.: revisar diferença entre objeto indireto e complemento nominal" />
+            </label>
+          </div>
+        </div>
+      </article>
+
+      <div class="nav-row">
+        <button id="prevBtn" class="btn btn-ghost">← Anterior</button>
+        <button id="nextBtn" class="btn btn-primary">Próxima →</button>
       </div>
     </section>
 
-    <section id="results" class="panel hidden">
-      <p class="eyebrow">RESULTADO</p>
-      <h2 id="score-title">0 / 0</h2>
-      <p id="score-detail" class="muted"></p>
-      <div class="actions">
-        <button id="copy-report-btn" class="primary">Copiar relatório</button>
-        <button id="new-btn" class="secondary">Novo simulado</button>
+    <section id="resultView" class="view hidden">
+      <div class="card result-hero">
+        <span class="eyebrow">Simulado concluído</span>
+        <h1 id="resultTitle">Resultado</h1>
+        <div id="scoreBig" class="score-big"></div>
+        <p id="resultMeta"></p>
       </div>
-      <textarea id="report" class="report" readonly></textarea>
+
+      <div class="grid two-cols">
+        <section class="card">
+          <h2>Desempenho por disciplina</h2>
+          <div id="disciplineResults" class="result-list"></div>
+        </section>
+        <section class="card">
+          <h2>Diagnóstico rápido</h2>
+          <div id="diagnosticResults" class="result-list"></div>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Relatório copiável</span>
+            <h2>Leve o resultado para a análise</h2>
+          </div>
+          <button id="copyReportBtn" class="btn btn-primary">Copiar relatório</button>
+        </div>
+        <textarea id="reportOutput" class="report-output" readonly></textarea>
+      </section>
+
+      <section class="card">
+        <h2>Questões</h2>
+        <div id="questionResults" class="question-results"></div>
+      </section>
+
+      <div class="nav-row result-actions">
+        <button id="backHomeBtn" class="btn btn-ghost">Voltar ao início</button>
+        <button id="retryWrongBtn" class="btn btn-primary">Treinar erros desta sessão</button>
+      </div>
     </section>
   </main>
 
-  <footer class="wrap footer">
-    <p>Questões reais do banco mestre. Sem geração de itens inéditos.</p>
-  </footer>
+  <dialog id="imageDialog" class="image-dialog">
+    <button id="closeImageBtn" class="dialog-close" aria-label="Fechar imagem">×</button>
+    <img id="dialogImage" alt="Imagem ampliada da questão" />
+  </dialog>
 
-  <script src="app.js" defer></script>
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <script src="js/app.js" defer></script>
 </body>
 </html>

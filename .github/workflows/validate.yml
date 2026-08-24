@@ -1,0 +1,111 @@
+name: Validar MVP
+
+on:
+  push:
+    branches: [mvp-v0.1, main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar banco
+        shell: python
+        run: |
+          import base64, gzip, hashlib, json, pathlib
+
+          root = pathlib.Path('.')
+          bank_paths = [
+              'data/banco.part01.b64', 'data/banco.part02.b64',
+              'data/banco.part03a.b64', 'data/banco.part03b.b64', 'data/banco.part03c.b64', 'data/banco.part03d.b64',
+              'data/banco.part04.b64',
+              'data/banco.part05a.b64', 'data/banco.part05b.b64', 'data/banco.part05c.b64', 'data/banco.part05d.b64',
+              'data/banco.part06a.b64', 'data/banco.part06b.b64',
+              'data/banco.part06c1a.b64', 'data/banco.part06c1b1.b64', 'data/banco.part06c1b2.b64',
+              'data/banco.part06c1b3a.b64', 'data/banco.part06c1b3b.b64',
+              'data/banco.part06c1b3c1.b64', 'data/banco.part06c1b3c2.b64', 'data/banco.part06c1b3c3.b64',
+              'data/banco.part06c1b4.b64', 'data/banco.part06c2.b64', 'data/banco.part06d.b64',
+              'data/banco.part07.b64', 'data/banco.part08.b64'
+          ]
+          bank_b64 = ''.join((root / path).read_text().strip() for path in bank_paths)
+          raw = gzip.decompress(base64.b64decode(bank_b64))
+          assert hashlib.sha256(raw).hexdigest() == 'db16349342ee255fb8198c0bc2aaa98fff8835e0765ab16c1dc48d684e52d9ad'
+          bank = json.loads(raw)
+          qs = bank['questoes']
+          assert len(qs) == 255
+          assert len({q['id'] for q in qs}) == 255
+          assert bank['metadados']['questoes_validas'] == 251
+          assert bank['metadados']['questoes_anuladas'] == 4
+
+          for q in qs:
+              status = str(q.get('situacao', '')).lower()
+              gab = q.get('gabarito_historico')
+              if gab and 'anulad' not in status:
+                  assert gab in (q.get('alternativas') or {}), (q['id'], gab)
+
+          supports = {s['id'] for s in bank.get('suportes', [])}
+          asset_paths = {a.get('caminho') for a in bank.get('assets', []) if isinstance(a, dict)}
+          for q in qs:
+              ext = q.get('extensoes') or {}
+              if ext.get('suporte_id'):
+                  assert ext['suporte_id'] in supports, (q['id'], ext['suporte_id'])
+              if ext.get('asset'):
+                  assert ext['asset'] in asset_paths, (q['id'], ext['asset'])
+
+          print('Banco: OK — 255 questões, IDs, gabaritos, suportes e assets validados')
+
+      - name: Validar imagem da questão
+        shell: python
+        run: |
+          import base64, pathlib
+
+          root = pathlib.Path('.')
+          img_b64 = ''.join((root / 'assets' / f'ifc_2026_q03_charge.part{i:02d}.b64').read_text().strip() for i in range(1, 3))
+          img = base64.b64decode(img_b64, validate=True)
+          assert img[:2] == b'\xff\xd8', 'JPEG sem marcador SOI'
+          assert img[-2:] == b'\xff\xd9', 'JPEG sem marcador EOI'
+
+          i = 2
+          size = None
+          while i + 4 < len(img):
+              if img[i] != 0xFF:
+                  i += 1
+                  continue
+              marker = img[i + 1]
+              i += 2
+              if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+                  continue
+              if i + 2 > len(img):
+                  break
+              seglen = int.from_bytes(img[i:i+2], 'big')
+              if seglen < 2 or i + seglen > len(img):
+                  break
+              if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                  h = int.from_bytes(img[i+3:i+5], 'big')
+                  w = int.from_bytes(img[i+5:i+7], 'big')
+                  size = (w, h)
+                  break
+              i += seglen
+          assert size and size[0] > 0 and size[1] > 0, 'Dimensões JPEG não encontradas'
+          print(f'Imagem: OK — JPEG {size[0]}x{size[1]}')
+
+      - name: Validar JavaScript
+        shell: bash
+        run: |
+          cat js/engine.part01.txt js/engine.part02.txt js/engine.part03.txt > /tmp/engine.js
+          node --check /tmp/engine.js
+          node --check js/app.js
+          node --check sw.js
+
+      - name: Conferir arquivos do cache offline
+        shell: python
+        run: |
+          import pathlib, re
+          text = pathlib.Path('sw.js').read_text()
+          paths = re.findall(r"'\./([^']+)'", text)
+          missing = [p for p in paths if p and not pathlib.Path(p).exists()]
+          assert not missing, f'Arquivos ausentes no CORE do service worker: {missing}'
+          print('Cache offline: OK')

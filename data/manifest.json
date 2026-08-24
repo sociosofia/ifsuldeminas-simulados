@@ -1,0 +1,14 @@
+{
+  "nome": "Banco-mestre de questões",
+  "versao": "MASTER-v1.0",
+  "arquivo_principal": "banco_mestre_questoes_ifsuldeminas.json",
+  "quantidade_questoes": 255,
+  "assets": [
+    "assets/ifc_2026_q03_charge.jpg"
+  ],
+  "bases_originais": [
+    "banco_questoes_legislacao_auditado.json",
+    "banco_questoes_sociologia_auditado.json",
+    "banco_questoes_portugues_auditado.json"
+  ]
+}
