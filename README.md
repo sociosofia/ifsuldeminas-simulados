@@ -21,19 +21,24 @@ PWA pessoal para treino com **questões reais Fundatec** reunidas no banco-mestr
 
 ## Arquitetura
 
-- `data/banco.part*.b64`: exportação operacional compactada do banco-mestre, dividida em oito partes para armazenamento textual no repositório e descompactada no navegador.
-- `data/manifest.json`: inventário do pacote.
-- `index.html`, `css/`, `js/`: motor do simulador.
-- `assets/`: imagem exigida pela questão (armazenada em duas partes Base64 textuais nesta primeira versão) e ícone do PWA.
+O banco é distribuído como Base64 + gzip. Para evitar corrupção em arquivos textuais grandes, os blocos lógicos 03, 05 e 06 foram subdivididos em fragmentos menores e são remontados pelo carregador antes da descompactação. Os demais blocos são consumidos diretamente.
 
-O arquivo Excel permanece como fonte editorial/auditável. O JSON é a camada de distribuição do aplicativo. O histórico de resolução é independente do banco e permanece no dispositivo do usuário.
+- `data/banco.part*.b64`: fragmentos operacionais verificados do banco-mestre;
+- `data/manifest.json`: inventário do pacote;
+- `index.html`, `css/`, `js/`: interface e motor do simulador;
+- `assets/`: imagem exigida pela questão e ícone do PWA;
+- `.github/workflows/validate.yml`: auditoria automática do banco, referências, JavaScript, imagem e cache offline.
 
-## Validação do pacote
+O arquivo Excel permanece como fonte editorial/auditável. O pacote JSON compactado é a camada de distribuição do aplicativo. O histórico de resolução é independente do banco e permanece no dispositivo do usuário.
 
-A exportação operacional foi conferida contra o JSON do banco-mestre: as oito partes remontam e descompactam exatamente o arquivo-fonte com 255 questões. A imagem da questão IFC 2026 também foi conferida após a remontagem das duas partes Base64.
+## Integridade
+
+A exportação operacional do banco foi reconstruída e conferida contra o arquivo-fonte: SHA-256 `db16349342ee255fb8198c0bc2aaa98fff8835e0765ab16c1dc48d684e52d9ad`, com 255 questões, 255 IDs únicos, 251 válidas e 4 anuladas.
+
+O workflow do repositório repete essas verificações e também confere gabaritos, referências a textos-base/assets, sintaxe JavaScript e existência de todos os arquivos necessários ao cache offline.
 
 ## Publicação
 
-O repositório foi criado como privado. Para testar em navegador/celular, publique a pasta raiz por um host estático que tenha acesso ao repositório. Abrir `index.html` diretamente pelo sistema de arquivos não é suportado porque o navegador bloqueia o carregamento do banco por `fetch`.
+O repositório permanece privado. Para testar em navegador/celular, a pasta raiz deve ser publicada por um host estático com acesso ao repositório. Abrir `index.html` diretamente pelo sistema de arquivos não é suportado porque o navegador bloqueia o carregamento do banco por `fetch`.
 
-Como o pacote contém o texto integral das questões, a publicação web deve ser tratada separadamente da hospedagem do código. Se o objetivo continuar sendo uso pessoal, prefira uma camada de acesso autenticado em vez de simplesmente tornar o repositório ou os dados públicos.
+Como o pacote contém o texto integral das questões, a publicação web deve ser tratada separadamente da hospedagem do código. Para uso pessoal, a opção preferida é uma camada de acesso autenticado, sem tornar os dados públicos.
