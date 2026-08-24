@@ -1,8 +1,9 @@
-const CACHE = 'ifsuldeminas-simulados-v4';
+const CACHE = 'ifsuldeminas-simulados-v5';
 const CORE = [
   './', './index.html', './css/app.css', './js/app.js',
   './js/engine.part01.txt', './js/engine.part02.txt', './js/engine.part03.txt',
   './manifest.webmanifest', './assets/icon.svg', './data/manifest.json',
+  './assets/ifc_2026_q03_charge.part01.b64', './assets/ifc_2026_q03_charge.part02.b64',
   './data/banco.part01.b64', './data/banco.part02.b64',
   './data/banco.part03a.b64', './data/banco.part03b.b64', './data/banco.part03c.b64', './data/banco.part03d.b64',
   './data/banco.part04.b64',
