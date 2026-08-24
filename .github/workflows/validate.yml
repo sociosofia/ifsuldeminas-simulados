@@ -18,20 +18,8 @@ jobs:
           import base64, gzip, hashlib, json, pathlib
 
           root = pathlib.Path('.')
-          bank_paths = [
-              'data/banco.part01.b64', 'data/banco.part02.b64',
-              'data/banco.part03a.b64', 'data/banco.part03b.b64', 'data/banco.part03c.b64', 'data/banco.part03d.b64',
-              'data/banco.part04.b64',
-              'data/banco.part05a.b64', 'data/banco.part05b.b64', 'data/banco.part05c.b64', 'data/banco.part05d.b64',
-              'data/banco.part06a.b64', 'data/banco.part06b.b64',
-              'data/banco.part06c1a.b64',
-              'data/banco.part06c1b1.b64', 'data/banco.part06c1b2.b64',
-              'data/banco.part06c1b3a.b64', 'data/banco.part06c1b3b.b64',
-              'data/banco.part06c1b3c1.b64', 'data/banco.part06c1b3c2.b64', 'data/banco.part06c1b3c3.b64',
-              'data/banco.part06c1b4.b64', 'data/banco.part06c2.b64', 'data/banco.part06d.b64',
-              'data/banco.part07.b64', 'data/banco.part08.b64'
-          ]
-          bank_b64 = ''.join((root / path).read_text().strip() for path in bank_paths)
+          bank_paths = [root / 'data' / f'banco.part{i:02d}.b64' for i in range(1, 9)]
+          bank_b64 = ''.join(path.read_text().strip() for path in bank_paths)
           raw = gzip.decompress(base64.b64decode(bank_b64))
           assert hashlib.sha256(raw).hexdigest() == 'db16349342ee255fb8198c0bc2aaa98fff8835e0765ab16c1dc48d684e52d9ad'
           bank = json.loads(raw)
