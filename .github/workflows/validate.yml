@@ -55,7 +55,15 @@ jobs:
               if ext.get('asset'):
                   assert ext['asset'] in asset_paths, (q['id'], ext['asset'])
 
+          (root / 'banco_mestre_questoes_ifsuldeminas.json').write_bytes(raw)
           print('Banco: OK — 255 questões, IDs, gabaritos, suportes e assets validados')
+
+      - name: Disponibilizar banco JSON validado
+        uses: actions/upload-artifact@v4
+        with:
+          name: banco-mestre-json
+          path: banco_mestre_questoes_ifsuldeminas.json
+          if-no-files-found: error
 
       - name: Validar imagem da questão
         shell: python
